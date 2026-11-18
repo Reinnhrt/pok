@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--
+  CARA MENCARI BAGIAN YANG MAU DIUBAH:
+  Tekan Ctrl+F (di HP: menu Cari) lalu ketik "UBAH" untuk melompat antar penanda.
+  Daftar penanda:
+  [UBAH-JUDUL]    judul tab browser
+  [UBAH-WARNA]    semua warna (terang & gelap)
+  [UBAH-UKURAN]   ukuran area tangga, karakter, tulisan
+  [UBAH-ANIMASI]  kecepatan naik & jatuh
+  [UBAH-GAMBAR]   gambar karakter, bendera, latar, tangga
+  [UBAH-TEKS]     semua tulisan & ikon (nyawa, menang, kalah, tombol)
+  [UBAH-ATURAN]   jumlah nyawa, jeda, perilaku soal salah
+  [UBAH-SOAL]     daftar soal & jawaban
+  [UBAH-TANGGA]   bentuk/tinggi tangga
+-->
+<!-- [UBAH-JUDUL] -->
+<title>Panjat Tangga Organisasi Komputer</title>
+<style>
+/* ===== [UBAH-WARNA] Mode terang ===== */
+:root{--bg:#eef3f8;--card:#fff;--text:#1b2733;--muted:#5d6f80;--btn:#e6edf5;--btnh:#d3e0ee;--ok:#2e9e5b;--bad:#d64545;--step:#8fa8c2;--sky:#cfe6fb;--acc:#2f6fb0;--acct:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* ===== [UBAH-WARNA] Mode gelap ===== */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#373838;--card:#151616;--text:#d3d7db;--muted:#ffffff;--btn:#26323e;--btnh:#314252;--step:#4b6178;--sky:#1d2f40;--acc:#5a9ee0;--acct:#0d1620}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:14px}
+.top{display:flex;justify-content:space-between;font-size:15px;margin-bottom:8px;color:var(--muted)}
+/* ===== [UBAH-UKURAN] Tinggi area tangga ===== */
+.stage{position:relative;height:230px;background:var(--sky);border-radius:16px;overflow:hidden;margin-bottom:12px}
+.step{position:absolute;bottom:0;background:var(--step);border-top:3px solid rgba(255,255,255,.35)}
+/* ===== [UBAH-ANIMASI] .6s = kecepatan naik ===== */
+.char{position:absolute;font-size:30px;line-height:1;transition:left .6s ease,bottom .6s ease,transform .9s ease;margin-left:-2px}
+/* ===== [UBAH-ANIMASI] .9s = kecepatan jatuh, 200deg = putaran saat jatuh ===== */
+.char.fall{transition:left .3s,bottom .9s cubic-bezier(.5,0,1,1),transform .9s;transform:rotate(200deg)}
+.flag{position:absolute;font-size:24px}
+.char img,.flag img{display:block}
+.card{background:var(--card);border-radius:16px;padding:16px}
+/* ===== [UBAH-UKURAN] Tulisan soal & tombol jawaban ===== */
+.q{font-size:18px;line-height:1.45;margin:0 0 12px}
+.opt{display:block;width:100%;font:inherit;font-size:16px;text-align:left;padding:13px;margin-bottom:8px;border:0;border-radius:12px;background:var(--btn);color:var(--text);cursor:pointer}
+.opt:active{background:var(--btnh)}
+.opt.ok{background:var(--ok);color:#fff}.opt.bad{background:var(--bad);color:#fff}
+.main{background:var(--acc);color:var(--acct);text-align:center;font-weight:600}
+.res{text-align:center}.res h2{margin:6px 0}.res p{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span id="lives"></span><span id="prog"></span></div>
+  <div class="stage" id="stage"></div>
+  <div class="card" id="card"></div>
+</div>
+<script>
+// ===== [UBAH-GAMBAR] =====
+// Isi dengan nama file (mis. "karakter.png", satu folder dengan HTML).
+// Kosongkan ("") untuk memakai emoji bawaan.
+var GAMBAR={
+  karakter:"",  // karakter yang memanjat
+  bendera:"",   // gambar di puncak tangga
+  latar:"",     // latar belakang area tangga
+  tangga:""     // tekstur anak tangga
+};
+// [UBAH-GAMBAR] emoji bawaan & ukuran (piksel) karakter dan bendera
+var EMOJI_KARAKTER="🧗", TINGGI_KARAKTER=36;
+var EMOJI_BENDERA="🚩",  TINGGI_BENDERA=28;
+
+// ===== [UBAH-TEKS] semua tulisan & ikon =====
+var TEKS={
+  nyawa:"Kesempatan: ",
+  ikonNyawaPenuh:"❤️",
+  ikonNyawaKosong:"🖤",
+  tangga:"Anak tangga ",
+  ikonMenang:"🏆",
+  judulMenang:"Kamu mencapai puncak!",
+  isiMenang:"Semua materi berhasil dijawab. Hebat!",
+  ikonKalah:"💀",
+  judulKalah:"Kamu terjatuh!",
+  isiKalah:"Kesempatan habis di anak tangga ke-",   // angka ditambahkan otomatis
+  isiKalah2:". Ayo coba lagi!",
+  tombolUlang:"Main lagi"
+};
+
+// ===== [UBAH-ATURAN] =====
+var MAXLIFE=3;        // jumlah kesempatan salah
+var JEDA=1100;        // jeda (milidetik) sebelum soal berikutnya
+var ULANG_SOAL_SALAH=true;  // true = soal salah diulang di akhir; false = dilewati
+
+// ===== [UBAH-SOAL] =====
+// q = pertanyaan, o = pilihan. Pilihan PERTAMA adalah jawaban benar (diacak saat tampil).
+// Tambah/hapus soal dengan menyalin/menghapus satu baris {q:...,o:[...]},
+var BANK=[
+{q:"Komponen yang berfungsi mengeksekusi instruksi program adalah…",o:["CPU (Prosesor)","RAM","Harddisk","Monitor"]},
+{q:"Satuan data terkecil dalam komputer adalah…",o:["Bit","Byte","Word","Kilobyte"]},
+{q:"1 byte sama dengan berapa bit?",o:["8","4","16","32"]},
+{q:"Memori yang isinya hilang saat listrik padam (volatile) adalah…",o:["RAM","ROM","SSD","Harddisk"]},
+{q:"Bagian CPU yang melakukan operasi aritmatika dan logika adalah…",o:["ALU","Control Unit","Register","Cache"]},
+{q:"Bagian CPU yang mengatur dan mengendalikan eksekusi instruksi adalah…",o:["Control Unit","ALU","Address Bus","Monitor"]},
+{q:"Arsitektur yang memakai satu memori yang sama untuk instruksi dan data disebut…",o:["Von Neumann","Harvard","Pipeline","Superskalar"]},
+{q:"Siklus dasar eksekusi instruksi adalah…",o:["Fetch – Decode – Execute","Load – Store – Halt","Input – Process – Output","Boot – Run – Shutdown"]},
+{q:"Register yang menyimpan alamat instruksi berikutnya adalah…",o:["Program Counter","Accumulator","Stack Pointer","Flag Register"]},
+{q:"Memori tercepat dalam hierarki memori adalah…",o:["Register","Cache","RAM","Harddisk"]},
+{q:"Jalur yang membawa alamat lokasi memori adalah…",o:["Address Bus","Data Bus","Control Bus","Power Bus"]},
+{q:"Bilangan biner 1010 bernilai desimal…",o:["10","8","12","5"]},
+{q:"Sistem bilangan heksadesimal memiliki basis…",o:["16","8","10","2"]},
+{q:"Cache L1 umumnya terletak…",o:["Di dalam prosesor, dekat inti CPU","Di dalam harddisk","Di dalam power supply","Di dalam monitor"]},
+{q:"Perangkat berikut yang termasuk perangkat output adalah…",o:["Monitor","Keyboard","Mouse","Scanner"]}
+];
+
+// ===== KODE PROGRAM (biasanya tidak perlu diubah) =====
+var N=BANK.length, st, locked;
+var stage=document.getElementById("stage"), card=document.getElementById("card");
+
+function isi(el,src,emoji,tinggi){
+  if(src){el.innerHTML='<img src="'+src+'" alt="" style="height:'+tinggi+'px">'}
+  else{el.textContent=emoji}
+}
+// [UBAH-TANGGA] tinggi tiap anak tangga: angka 88 = tinggi puncak (%), angka 4 = tinggi anak tangga pertama (%)
+function tinggiTangga(i){return i/(N+1)*88+4}
+
+function buildStage(){
+  stage.innerHTML="";
+  if(GAMBAR.latar)stage.style.background="url('"+GAMBAR.latar+"') center/cover";
+  for(var i=1;i<=N;i++){
+    var s=document.createElement("div");s.className="step";
+    s.style.left=(i/(N+1)*100)+"%";s.style.width=(100/(N+1))+"%";s.style.height=tinggiTangga(i)+"%";
+    if(GAMBAR.tangga)s.style.background="url('"+GAMBAR.tangga+"') center/cover";
+    stage.appendChild(s);
+  }
+  var f=document.createElement("div");f.className="flag";isi(f,GAMBAR.bendera,EMOJI_BENDERA,TINGGI_BENDERA);
+  f.style.left=(N/(N+1)*100+1)+"%";f.style.bottom=(tinggiTangga(N)+1)+"%";stage.appendChild(f);
+  var c=document.createElement("div");c.className="char";c.id="char";isi(c,GAMBAR.karakter,EMOJI_KARAKTER,TINGGI_KARAKTER);stage.appendChild(c);
+  place(0);
+}
+function place(p){
+  var c=document.getElementById("char");
+  c.style.left="calc("+(p/(N+1)*100)+"% + 2px)";
+  c.style.bottom=(p===0?0:tinggiTangga(p))+"%";
+}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+function start(){
+  st={p:0,life:MAXLIFE,queue:shuffle(BANK.map(function(_,i){return i}))};
+  buildStage();ask();
+}
+function hud(){
+  document.getElementById("lives").textContent=TEKS.nyawa+TEKS.ikonNyawaPenuh.repeat(st.life)+TEKS.ikonNyawaKosong.repeat(MAXLIFE-st.life);
+  document.getElementById("prog").textContent=TEKS.tangga+st.p+"/"+N;
+}
+function ask(){
+  hud();locked=false;
+  var qi=st.queue[0],it=BANK[qi],correct=it.o[0];
+  card.innerHTML="";
+  var q=document.createElement("p");q.className="q";q.textContent=it.q;card.appendChild(q);
+  shuffle(it.o).forEach(function(t){
+    var b=document.createElement("button");b.className="opt";b.textContent=t;
+    b.onclick=function(){answer(b,t===correct,correct)};card.appendChild(b);
+  });
+}
+function answer(b,ok,correct){
+  if(locked)return;locked=true;
+  var btns=card.querySelectorAll(".opt");
+  if(ok){
+    b.classList.add("ok");st.queue.shift();st.p++;place(st.p);
+  }else{
+    b.classList.add("bad");
+    btns.forEach(function(x){if(x.textContent===correct)x.classList.add("ok")});
+    st.life--;
+    // [UBAH-ATURAN] perilaku soal salah ditentukan oleh ULANG_SOAL_SALAH di atas
+    if(ULANG_SOAL_SALAH){st.queue.push(st.queue.shift())}else{st.queue.shift()}
+  }
+  hud();
+  setTimeout(function(){
+    if(st.p>=N)return end(true);
+    if(st.life<=0||st.queue.length===0)return end(false);
+    ask();
+  },JEDA);
+}
+function end(win){
+  hud();
+  var c=document.getElementById("char");
+  if(!win){c.classList.add("fall");c.style.bottom="0%";c.style.left="calc("+(st.p/(N+1)*100)+"% + 2px)"}
+  setTimeout(function(){
+    card.innerHTML='<div class="res"><div style="font-size:54px">'+(win?TEKS.ikonMenang:TEKS.ikonKalah)+'</div><h2>'+
+      (win?TEKS.judulMenang:TEKS.judulKalah)+'</h2><p>'+
+      (win?TEKS.isiMenang:TEKS.isiKalah+st.p+TEKS.isiKalah2)+
+      '</p></div>';
+    var b=document.createElement("button");b.className="opt main";b.textContent=TEKS.tombolUlang;b.onclick=start;card.appendChild(b);
+  },win?600:1000);
+}
+start();
+</script>
+</body>
+</html>
